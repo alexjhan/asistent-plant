@@ -5,10 +5,22 @@ Analyzes screen content and detects UI elements
 
 import cv2
 import numpy as np
-import pytesseract
 from PIL import Image
 from typing import Dict, List, Optional, Tuple
-import mss
+
+try:
+    import pytesseract
+    PYTESSERACT_AVAILABLE = True
+except ImportError:
+    PYTESSERACT_AVAILABLE = False
+    print("Warning: pytesseract not available. OCR features will be limited.")
+
+try:
+    import mss
+    MSS_AVAILABLE = True
+except ImportError:
+    MSS_AVAILABLE = False
+    print("Warning: mss not available. Screen capture will use fallback.")
 
 
 class VisionModule:
@@ -18,7 +30,10 @@ class VisionModule:
 
     def __init__(self):
         """Initialize the vision module."""
-        self.sct = mss.mss()
+        if MSS_AVAILABLE:
+            self.sct = mss.mss()
+        else:
+            self.sct = None
         self.last_screenshot = None
 
     def capture_screen(self, region: Optional[Dict] = None) -> np.ndarray:
@@ -31,6 +46,11 @@ class VisionModule:
         Returns:
             Screen capture as numpy array
         """
+        if not MSS_AVAILABLE or self.sct is None:
+            # Return dummy image for testing
+            print("Warning: Screen capture not available")
+            return np.zeros((100, 100, 3), dtype=np.uint8)
+        
         if region is None:
             # Capture entire screen (primary monitor)
             monitor = self.sct.monitors[1]
@@ -60,6 +80,10 @@ class VisionModule:
         Returns:
             List of dictionaries with location and confidence
         """
+        if not PYTESSERACT_AVAILABLE:
+            print("Warning: OCR not available")
+            return []
+        
         img = self.capture_screen(region)
         
         # Use pytesseract to detect text

@@ -17,7 +17,8 @@ class NLUModule:
 
     def __init__(self):
         """Initialize the NLU module with a pre-trained model."""
-        self.model = SentenceTransformer('all-MiniLM-L6-v2')
+        self.model = None  # Lazy-load the model
+        self.model_name = 'all-MiniLM-L6-v2'
         
         # Define action templates with examples
         self.action_templates = {
@@ -65,13 +66,26 @@ class NLUModule:
             ]
         }
         
-        # Pre-compute embeddings for action templates
+        # Pre-compute embeddings for action templates (lazy)
         self.action_embeddings = {}
-        for action, templates in self.action_templates.items():
-            self.action_embeddings[action] = self.model.encode(
-                templates, convert_to_tensor=True
-            )
 
+    def _ensure_model_loaded(self):
+        """Ensure the model is loaded."""
+        if self.model is None:
+            try:
+                print(f"Loading NLU model: {self.model_name}...")
+                self.model = SentenceTransformer(self.model_name)
+                
+                # Compute embeddings for action templates
+                for action, templates in self.action_templates.items():
+                    self.action_embeddings[action] = self.model.encode(
+                        templates, convert_to_tensor=True
+                    )
+                print("NLU model loaded successfully")
+            except Exception as e:
+                print(f"Warning: Could not load NLU model: {e}")
+                self.model = None
+    
     def parse_command(self, command: str) -> Dict:
         """
         Parse a natural language command into structured action.
@@ -83,6 +97,13 @@ class NLUModule:
             Dictionary with action, target, and parameters
         """
         command = command.lower().strip()
+        
+        # Ensure model is loaded
+        self._ensure_model_loaded()
+        
+        if self.model is None or not self.action_embeddings:
+            # Fallback to keyword matching if model not available
+            return self._fallback_parse(command)
         
         # Encode the command
         command_embedding = self.model.encode(command, convert_to_tensor=True)
@@ -105,6 +126,46 @@ class NLUModule:
         return {
             "action": best_action,
             "confidence": best_score,
+            "parameters": params,
+            "raw_command": command
+        }
+    
+    def _fallback_parse(self, command: str) -> Dict:
+        """
+        Fallback parser using keyword matching when model is not available.
+        
+        Args:
+            command: Command string
+            
+        Returns:
+            Parsed command dictionary
+        """
+        # Simple keyword matching
+        action = "unknown"
+        confidence = 0.5
+        
+        if any(word in command for word in ['click', 'press', 'tap', 'select']):
+            action = "click"
+        elif any(word in command for word in ['type', 'enter', 'write', 'input']):
+            action = "type"
+        elif any(word in command for word in ['move', 'cursor', 'mouse']):
+            action = "move"
+        elif any(word in command for word in ['scroll', 'page']):
+            action = "scroll"
+        elif any(word in command for word in ['open', 'launch', 'start']):
+            action = "open"
+        elif any(word in command for word in ['find', 'locate', 'search']):
+            action = "find"
+        elif any(word in command for word in ['wait', 'pause', 'sleep']):
+            action = "wait"
+        elif any(word in command for word in ['screenshot', 'capture', 'snap']):
+            action = "screenshot"
+        
+        params = self._extract_parameters(command, action)
+        
+        return {
+            "action": action,
+            "confidence": confidence,
             "parameters": params,
             "raw_command": command
         }

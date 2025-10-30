@@ -3,8 +3,14 @@ Voice Input Module
 Handles speech-to-text conversion
 """
 
-import speech_recognition as sr
 from typing import Optional, Dict
+
+try:
+    import speech_recognition as sr
+    SPEECH_RECOGNITION_AVAILABLE = True
+except ImportError:
+    SPEECH_RECOGNITION_AVAILABLE = False
+    print("Warning: speech_recognition not available. Voice features will be limited.")
 
 
 class VoiceModule:
@@ -19,12 +25,18 @@ class VoiceModule:
         Args:
             language: Language code for recognition
         """
-        self.recognizer = sr.Recognizer()
+        if SPEECH_RECOGNITION_AVAILABLE:
+            self.recognizer = sr.Recognizer()
+            self.microphone = None
+        else:
+            self.recognizer = None
+            self.microphone = None
         self.language = language
-        self.microphone = None
 
     def _get_microphone(self):
         """Get or initialize microphone."""
+        if not SPEECH_RECOGNITION_AVAILABLE:
+            return None
         if self.microphone is None:
             self.microphone = sr.Microphone()
         return self.microphone
@@ -41,6 +53,10 @@ class VoiceModule:
         Returns:
             Recognized text or None
         """
+        if not SPEECH_RECOGNITION_AVAILABLE:
+            print("Voice recognition not available")
+            return None
+        
         try:
             with self._get_microphone() as source:
                 print("Listening...")
