@@ -1,0 +1,6 @@
+include README.md
+include LICENSE
+include requirements.txt
+recursive-include asistent_plant *.py
+recursive-include asistent_plant/examples *.py
+recursive-include asistent_plant/config *.py
