@@ -1,0 +1,31 @@
+# Core dependencies
+numpy>=1.24.0
+pillow>=10.0.0
+opencv-python>=4.8.0
+pyautogui>=0.9.54
+pytesseract>=0.3.10
+
+# AI and NLP
+transformers>=4.30.0
+torch>=2.0.0
+sentence-transformers>=2.2.0
+openai>=1.0.0
+ollama>=0.1.0
+
+# Voice recognition
+SpeechRecognition>=3.10.0
+pyaudio>=0.2.13
+pydub>=0.25.1
+
+# Screen capture and window management
+mss>=9.0.0
+pygetwindow>=0.0.9
+pynput>=1.7.6
+
+# Telegram integration
+python-telegram-bot>=20.0
+aiofiles>=23.0.0
+
+# Utilities
+python-dotenv>=1.0.0
+pyyaml>=6.0
