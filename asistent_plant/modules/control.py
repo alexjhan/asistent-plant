@@ -4,15 +4,36 @@ Handles mouse, keyboard, and window operations
 """
 
 import time
-import pyautogui
 from typing import Optional, Tuple
-from pynput import mouse, keyboard
-import pygetwindow as gw
 
+try:
+    import pyautogui
+    pyautogui.FAILSAFE = True  # Move mouse to corner to abort
+    pyautogui.PAUSE = 0.1  # Small pause between actions
+    PYAUTOGUI_AVAILABLE = True
+except ImportError:
+    from . import control_stub
+    pyautogui = control_stub.MockPyAutoGUI()
+    PYAUTOGUI_AVAILABLE = False
 
-# Configure pyautogui safety features
-pyautogui.FAILSAFE = True  # Move mouse to corner to abort
-pyautogui.PAUSE = 0.1  # Small pause between actions
+try:
+    from pynput import mouse, keyboard
+    PYNPUT_AVAILABLE = True
+except ImportError:
+    PYNPUT_AVAILABLE = False
+
+try:
+    import pygetwindow as gw
+    PYGETWINDOW_AVAILABLE = True
+except ImportError:
+    from . import control_stub
+    
+    class gw:
+        getActiveWindow = control_stub.get_active_window
+        getWindowsWithTitle = control_stub.get_windows_with_title
+        getAllWindows = control_stub.get_all_windows
+    
+    PYGETWINDOW_AVAILABLE = False
 
 
 class ControlModule:
@@ -22,9 +43,18 @@ class ControlModule:
 
     def __init__(self):
         """Initialize the control module."""
-        self.screen_size = pyautogui.size()
-        self.mouse_controller = mouse.Controller()
-        self.keyboard_controller = keyboard.Controller()
+        if not PYAUTOGUI_AVAILABLE:
+            # Fallback to default screen size
+            self.screen_size = (1920, 1080)
+        else:
+            self.screen_size = pyautogui.size()
+        
+        if PYNPUT_AVAILABLE:
+            self.mouse_controller = mouse.Controller()
+            self.keyboard_controller = keyboard.Controller()
+        else:
+            self.mouse_controller = None
+            self.keyboard_controller = None
 
     def move_mouse(self, x: int, y: int, duration: float = 0.5):
         """
@@ -34,6 +64,9 @@ class ControlModule:
             x, y: Screen coordinates
             duration: Time to complete the movement
         """
+        if not PYAUTOGUI_AVAILABLE:
+            print(f"Mock: Moving mouse to ({x}, {y})")
+            return
         pyautogui.moveTo(x, y, duration=duration)
 
     def move_mouse_relative(self, dx: int, dy: int, duration: float = 0.5):

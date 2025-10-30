@@ -5,11 +5,14 @@ An AI-powered desktop automation agent that combines natural language understand
 ## Features ✨
 
 - **Natural Language Understanding**: Parse and understand commands in natural language
+- **LLM Integration**: Enhanced reasoning with OpenAI GPT or local Ollama models
 - **Computer Vision**: Analyze screen content, detect UI elements, and find text using OCR
 - **System Control**: Control mouse, keyboard, and window operations
+- **Telegram Bot**: Control your desktop remotely via Telegram (text & voice)
 - **Voice Input**: Speech-to-text for hands-free operation
 - **Multi-Step Commands**: Execute complex workflows with a single command
 - **ERP Automation**: Specialized support for automating ERP system tasks
+- **Secure Authentication**: Only authorized users can send commands
 - **Interactive Mode**: Command-line interface for real-time control
 - **Extensible Architecture**: Modular design for easy customization
 
@@ -63,6 +66,30 @@ Or use the installed command:
 
 ```bash
 asistent-plant --interactive
+```
+
+### Telegram Bot Mode
+
+Control your desktop remotely via Telegram:
+
+```bash
+# Set up environment variables first
+export TELEGRAM_BOT_TOKEN="your_bot_token"
+export TELEGRAM_AUTHORIZED_USERS="your_user_id"
+
+# Start the bot
+asistent-plant --telegram
+```
+
+With LLM enhancement:
+
+```bash
+# Using OpenAI
+export OPENAI_API_KEY="your_api_key"
+asistent-plant --telegram --llm openai
+
+# Using local Ollama
+asistent-plant --telegram --llm ollama --llm-model llama2
 ```
 
 ### Single Command
@@ -171,6 +198,63 @@ agent.start_voice_control()
 agent.start_voice_control(wake_word="hey jarvis")
 ```
 
+### Telegram Bot Integration
+
+```python
+# Initialize agent with Telegram
+config = {
+    'telegram': {
+        'token': 'your_bot_token',
+        'authorized_users': [123456789]
+    },
+    'llm': {
+        'provider': 'openai',
+        'model': 'gpt-3.5-turbo'
+    }
+}
+
+agent = DesktopAgent(config=config)
+
+# Start bot (blocking)
+agent.start_telegram_bot()
+```
+
+**Telegram Commands:**
+- `/start` - Initialize bot
+- `/help` - Show available commands
+- `/status` - Check agent status
+- `/screenshot` - Take and send screenshot
+- Send any text message to execute as command
+- Send voice message for voice command
+
+**Example Telegram Workflow:**
+1. User: "Open calculator and type 2+2"
+2. Bot: "⏳ Processing command..."
+3. Agent: Opens calculator, types calculation
+4. Bot: "✅ Executed: Opened calculator and entered calculation"
+
+### LLM-Enhanced Understanding
+
+```python
+# Initialize with LLM
+config = {
+    'llm': {
+        'provider': 'openai',  # or 'ollama'
+        'model': 'gpt-3.5-turbo',  # or 'llama2'
+        'api_key': 'your_api_key'
+    }
+}
+
+agent = DesktopAgent(config=config)
+
+# LLM will automatically enhance command understanding
+result = agent.execute_command("enter 500 units in the production field")
+
+# Analyze screen for task
+analysis = agent.analyze_screen_for_task("fill in the sales order form")
+print(analysis['actions'])  # List of suggested actions
+```
+
 ## Command Reference 📖
 
 ### Supported Actions
@@ -221,10 +305,38 @@ The agent consists of four main modules:
 
 ## Configuration ⚙️
 
+### Environment Variables
+
+Create a `.env` file (see `.env.example`):
+
+```bash
+# Telegram Bot
+TELEGRAM_BOT_TOKEN=your_bot_token_here
+TELEGRAM_AUTHORIZED_USERS=123456789,987654321
+
+# OpenAI
+OPENAI_API_KEY=your_openai_api_key_here
+
+# Ollama (for local LLM)
+OLLAMA_BASE_URL=http://localhost:11434
+
+# Voice
+VOICE_LANGUAGE=en-US
+```
+
+### Configuration File
+
 Create a configuration file at `~/.asistent_plant/config.yaml`:
 
 ```yaml
 language: en-US
+
+llm:
+  provider: openai  # or 'ollama' or 'none'
+  model: gpt-3.5-turbo  # or 'llama2' for Ollama
+
+telegram:
+  enabled: true
 
 voice:
   enabled: true
@@ -238,6 +350,37 @@ vision:
 control:
   mouse_speed: 0.5
   failsafe: true
+```
+
+### Telegram Bot Setup
+
+1. **Create a Bot:**
+   - Open Telegram and search for `@BotFather`
+   - Send `/newbot` and follow instructions
+   - Copy the bot token
+
+2. **Get Your User ID:**
+   - Search for `@userinfobot` on Telegram
+   - Send `/start` to get your user ID
+
+3. **Configure:**
+   ```bash
+   export TELEGRAM_BOT_TOKEN="123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
+   export TELEGRAM_AUTHORIZED_USERS="123456789"
+   ```
+
+### LLM Setup
+
+**OpenAI:**
+```bash
+export OPENAI_API_KEY="sk-..."
+```
+
+**Ollama (Local):**
+```bash
+# Install Ollama: https://ollama.ai
+ollama pull llama2
+export OLLAMA_BASE_URL="http://localhost:11434"
 ```
 
 ## Testing 🧪
@@ -294,8 +437,83 @@ MIT License - See LICENSE file for details
 - Tesseract for OCR
 - SpeechRecognition for voice input
 
+## Architecture 🏗️
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      Telegram Bot                           │
+│              (Remote Control Interface)                     │
+└─────────────────────┬───────────────────────────────────────┘
+                      │
+                      ▼
+┌─────────────────────────────────────────────────────────────┐
+│                   Desktop Agent                             │
+│                  (Main Orchestrator)                        │
+└─────┬─────────────┬──────────────┬──────────────┬──────────┘
+      │             │              │              │
+      ▼             ▼              ▼              ▼
+┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐
+│   NLU    │  │   LLM    │  │  Vision  │  │ Control  │
+│  Module  │  │  Module  │  │  Module  │  │  Module  │
+└──────────┘  └──────────┘  └──────────┘  └──────────┘
+     │             │              │              │
+     │             │              │              │
+     └─────────────┴──────────────┴──────────────┘
+                         │
+                         ▼
+              ┌─────────────────────┐
+              │  Operating System   │
+              │  (Mouse/Keyboard)   │
+              └─────────────────────┘
+```
+
+## Use Cases 📋
+
+### 1. ERP Data Entry
+```
+User → Telegram: "Enter 500 units of Product A in ERP"
+    ↓
+Agent → LLM: Analyze command and screen
+    ↓
+Agent → Vision: Find ERP window and fields
+    ↓
+Agent → Control: Click fields, type data
+    ↓
+Agent → Telegram: "✅ Data entered successfully"
+```
+
+### 2. Automated Testing
+```
+User → Voice: "Test the login workflow"
+    ↓
+Agent → Vision: Capture login screen
+    ↓
+Agent → Control: Enter credentials, click login
+    ↓
+Agent → Vision: Verify success page
+    ↓
+Agent → Report: Test passed/failed
+```
+
+### 3. Remote Desktop Control
+```
+User → Telegram: Voice message "Open Chrome"
+    ↓
+Agent → Voice: Convert to text
+    ↓
+Agent → Control: Open browser
+    ↓
+Agent → Telegram: Screenshot confirmation
+```
+
 ## Roadmap 🗺️
 
+- [x] Natural language understanding
+- [x] Computer vision and OCR
+- [x] System control (mouse/keyboard)
+- [x] Telegram bot integration
+- [x] LLM enhancement (OpenAI/Ollama)
+- [x] Voice command support
 - [ ] Add support for more languages
 - [ ] Implement custom action macros
 - [ ] Add web automation capabilities
@@ -303,6 +521,8 @@ MIT License - See LICENSE file for details
 - [ ] Add GUI interface
 - [ ] Support for recording and replaying actions
 - [ ] Integration with more AI models
+- [ ] Mobile app companion
+- [ ] Multi-monitor support
 
 ## Support 💬
 

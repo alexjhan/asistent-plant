@@ -4,13 +4,14 @@ Desktop Agent - Main orchestrator for the AI desktop automation agent
 
 import time
 from typing import Dict, List, Optional, Callable
-from .modules import NLUModule, VisionModule, ControlModule, VoiceModule
+from .modules import NLUModule, VisionModule, ControlModule, VoiceModule, LLMModule, TelegramBot
 
 
 class DesktopAgent:
     """
     Main orchestrator for the AI-powered desktop automation agent.
-    Combines NLU, computer vision, and system control to perform automated tasks.
+    Combines NLU, computer vision, LLM reasoning, and system control to perform automated tasks.
+    Supports Telegram bot interface for remote control.
     """
 
     def __init__(self, config: Optional[Dict] = None):
@@ -29,27 +30,111 @@ class DesktopAgent:
         self.control = ControlModule()
         self.voice = VoiceModule(language=self.config.get('language', 'en-US'))
         
+        # Initialize LLM module
+        llm_config = self.config.get('llm', {})
+        self.llm = LLMModule(
+            provider=llm_config.get('provider', 'none'),
+            model=llm_config.get('model'),
+            api_key=llm_config.get('api_key'),
+            base_url=llm_config.get('base_url')
+        )
+        
+        # Initialize Telegram bot
+        telegram_config = self.config.get('telegram', {})
+        self.telegram = TelegramBot(
+            token=telegram_config.get('token'),
+            authorized_users=telegram_config.get('authorized_users')
+        )
+        
+        # Set command handler for Telegram
+        if self.telegram.is_available():
+            self.telegram.set_command_handler(self._execute_command_sync)
+        
         print("Agent initialized successfully!")
+        if self.llm.is_available():
+            print(f"✓ LLM enabled: {self.llm.provider.value} - {self.llm.model}")
+        if self.telegram.is_available():
+            print(f"✓ Telegram bot enabled")
         
         # State
         self.running = False
         self.last_command = None
         self.command_history = []
 
-    def execute_command(self, command: str, use_vision: bool = True) -> Dict:
+    def execute_command(self, command: str, use_vision: bool = True, use_llm: bool = None) -> Dict:
         """
         Execute a natural language command.
         
         Args:
             command: Natural language command
             use_vision: Whether to use computer vision for element detection
+            use_llm: Whether to use LLM for enhanced understanding (auto-detect if None)
             
         Returns:
             Execution result dictionary
         """
         print(f"\nExecuting command: {command}")
         
-        # Parse the command
+        # Auto-detect LLM usage
+        if use_llm is None:
+            use_llm = self.llm.is_available()
+        
+        # Try LLM-enhanced understanding first
+        if use_llm and self.llm.is_available():
+            print("Using LLM for enhanced understanding...")
+            
+            # Get screen context if vision is enabled
+            context = {}
+            if use_vision:
+                try:
+                    screen_info = self.get_screen_info()
+                    context['screen_info'] = screen_info
+                except:
+                    pass
+            
+            enhanced = self.llm.enhance_command_understanding(command, context)
+            
+            if enhanced.get('success') and enhanced.get('actions'):
+                print(f"LLM Intent: {enhanced.get('intent', 'N/A')}")
+                
+                # Execute LLM-suggested actions
+                results = []
+                for action in enhanced['actions']:
+                    # Convert LLM action to our format
+                    parsed = {
+                        'action': action.get('action', 'unknown'),
+                        'parameters': action.get('parameters', {}),
+                        'raw_command': command,
+                        'confidence': enhanced.get('confidence', 0.8)
+                    }
+                    
+                    if 'target' in action:
+                        parsed['parameters']['target'] = action['target']
+                    
+                    result = self._execute_action(parsed, use_vision)
+                    results.append(result)
+                    time.sleep(0.3)
+                
+                # Store in history
+                self.command_history.append({
+                    'command': command,
+                    'parsed': enhanced,
+                    'timestamp': time.time(),
+                    'llm_enhanced': True
+                })
+                
+                # Return combined result
+                if len(results) == 1:
+                    return results[0]
+                else:
+                    all_success = all(r.get('success') for r in results)
+                    return {
+                        'success': all_success,
+                        'message': f"Executed {len(results)} actions",
+                        'results': results
+                    }
+        
+        # Fallback to standard NLU
         parsed = self.nlu.parse_command(command)
         print(f"Parsed action: {parsed['action']} (confidence: {parsed['confidence']:.2f})")
         
@@ -65,6 +150,24 @@ class DesktopAgent:
         
         self.last_command = parsed
         return result
+    
+    def _execute_command_sync(self, command: str) -> Dict:
+        """
+        Synchronous wrapper for command execution (used by Telegram bot).
+        
+        Args:
+            command: Command to execute
+            
+        Returns:
+            Execution result
+        """
+        try:
+            return self.execute_command(command)
+        except Exception as e:
+            return {
+                'success': False,
+                'message': f"Error: {str(e)}"
+            }
 
     def _execute_action(self, parsed: Dict, use_vision: bool) -> Dict:
         """
@@ -460,3 +563,64 @@ class DesktopAgent:
         print("\nRecent commands:")
         for i, entry in enumerate(reversed(history), 1):
             print(f"  {i}. {entry['command']}")
+    
+    def start_telegram_bot(self):
+        """
+        Start the Telegram bot for remote control.
+        This is a blocking call.
+        """
+        if not self.telegram.is_available():
+            print("Telegram bot not available. Please configure:")
+            print("  - Set TELEGRAM_BOT_TOKEN environment variable")
+            print("  - Optionally set TELEGRAM_AUTHORIZED_USERS (comma-separated user IDs)")
+            return
+        
+        print("\n=== Starting Telegram Bot ===")
+        print("The agent can now be controlled via Telegram")
+        print("Send /start to your bot to begin")
+        print("Press Ctrl+C to stop\n")
+        
+        try:
+            self.telegram.run()
+        except KeyboardInterrupt:
+            print("\nStopping Telegram bot...")
+            self.telegram.stop()
+    
+    def analyze_screen_for_task(self, task: str) -> Dict:
+        """
+        Analyze current screen to determine actions for a task.
+        Uses LLM if available.
+        
+        Args:
+            task: Task description
+            
+        Returns:
+            Analysis result with suggested actions
+        """
+        # Capture screen
+        screen = self.vision.capture_screen()
+        
+        # Get OCR text
+        import pytesseract
+        try:
+            screen_text = pytesseract.image_to_string(screen)
+        except:
+            screen_text = "[OCR not available]"
+        
+        # Detect UI elements
+        elements = self.vision.detect_ui_elements()
+        
+        # Build screen description
+        screen_description = f"Screen text:\n{screen_text[:500]}\n\n"
+        screen_description += f"Detected UI elements: {len(elements)}\n"
+        
+        # Use LLM for analysis if available
+        if self.llm.is_available():
+            analysis = self.llm.analyze_screen_context(screen_description, task)
+            return analysis
+        else:
+            return {
+                'success': False,
+                'message': 'LLM not available for screen analysis',
+                'screen_description': screen_description
+            }

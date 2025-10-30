@@ -51,11 +51,38 @@ def main():
         help='Language code for voice recognition (default: en-US)'
     )
     
+    parser.add_argument(
+        '--telegram',
+        action='store_true',
+        help='Start Telegram bot for remote control'
+    )
+    
+    parser.add_argument(
+        '--llm',
+        type=str,
+        choices=['openai', 'ollama', 'none'],
+        default='none',
+        help='LLM provider for enhanced understanding (default: none)'
+    )
+    
+    parser.add_argument(
+        '--llm-model',
+        type=str,
+        help='LLM model name (e.g., gpt-4, llama2)'
+    )
+    
     args = parser.parse_args()
     
     # Initialize the agent
     config = {
-        'language': args.language
+        'language': args.language,
+        'llm': {
+            'provider': args.llm,
+            'model': args.llm_model
+        },
+        'telegram': {
+            # Token and users loaded from environment variables
+        }
     }
     
     try:
@@ -85,6 +112,10 @@ def main():
         except KeyboardInterrupt:
             print("\nStopping voice control")
             sys.exit(0)
+    
+    elif args.telegram:
+        # Telegram bot mode
+        agent.start_telegram_bot()
     
     elif args.interactive:
         # Interactive mode
